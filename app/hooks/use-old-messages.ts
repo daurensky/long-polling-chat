@@ -1,24 +1,20 @@
-import { useEffect, useState } from "react";
-import axios from "axios";
-
-export type Message = {
-  _id: string;
-  message: string;
-};
+import { useEffect, useState } from 'react'
+import axios from 'axios'
+import Message from '~/interfaces/message'
 
 const useOldMessages = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([])
 
   useEffect(() => {
     const get = async () => {
-      const { data } = await axios.get<Message[]>("/api/messages");
-      setMessages(data);
-    };
+      const { data } = await axios.get<Message[]>('/api/messages')
+      setMessages(data)
+    }
 
-    get();
-  }, []);
+    get()
+  }, [])
 
-  return messages;
-};
+  return messages
+}
 
-export default useOldMessages;
+export default useOldMessages

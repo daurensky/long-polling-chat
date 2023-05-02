@@ -1,7 +1,7 @@
-const { Router } = require("express");
-const { nanoid } = require("nanoid");
-const { MongoClient, ServerApiVersion } = require("mongodb");
-const router = new Router();
+const { Router } = require('express')
+const { nanoid } = require('nanoid')
+const { MongoClient, ServerApiVersion } = require('mongodb')
+const router = new Router()
 
 const client = new MongoClient(process.env.MONGO_DSN, {
   serverApi: {
@@ -9,39 +9,65 @@ const client = new MongoClient(process.env.MONGO_DSN, {
     strict: true,
     deprecationErrors: true,
   },
-});
-const messages = client.db().collection("messages");
+})
+const messages = client.db().collection('messages')
 
-const subscribers = {};
+const subscribers = {}
+const subscriberIps = {}
 
-router.get("/api/messages", async (req, res) => {
-  const cursor = messages.find();
-  const result = [];
+router.get('/api/messages', async (req, res) => {
+  const cursor = messages.find()
+  const result = []
 
   for await (const message of cursor) {
-    result.push(message);
+    result.push(message)
   }
 
-  res.json(result);
-});
+  res.json(result)
+})
 
-router.get("/api/subscribe", (req, res) => {
-  const id = nanoid();
+router.get('/api/subscribe', (req, res) => {
+  const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress
 
-  subscribers[id] = res;
-  req.on("close", () => delete subscribers[id]);
-});
+  if (!subscriberIps[ipAddress]) {
+    subscriberIps[ipAddress] = nanoid()
+  }
 
-router.post("/api/publish", async (req, res) => {
-  await client.connect();
+  const subscriberId = subscriberIps[ipAddress]
+  subscribers[subscriberId] = res
 
-  await messages.insertOne({ message: req.body.message });
+  req.on('close', () => {
+    delete subscribers[subscriberId]
+  })
+})
+
+router.post('/api/publish', async (req, res) => {
+  const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress
+  const { userName, text } = req.body
+
+  const errors = [
+    !userName && 'Username cannot be empty',
+    !text && 'Text cannot be empty',
+  ].filter(Boolean)
+
+  if (errors.length > 0) {
+    res.json(errors).status(400)
+    return
+  }
+
+  await client.connect()
+
+  const subscriberId = subscriberIps[ipAddress]
+
+  const message = { userName, subscriberId, text }
+  const { insertedId } = await messages.insertOne(message)
+  message._id = insertedId
 
   for (const id in subscribers) {
-    subscribers[id].end(req.body.message);
+    subscribers[id].json(message)
   }
 
-  res.send("Message sent!");
-});
+  res.send('Message sent!')
+})
 
-module.exports = router;
+module.exports = router
